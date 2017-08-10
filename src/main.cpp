@@ -349,6 +349,12 @@ static void addField(const gp::FieldDescriptor *fieldDescriptor, QVariantList *f
     field["field_label"] = labelName(fieldDescriptor->label());
     field["field_default_value"] = defaultValue(fieldDescriptor);
 
+    // Add the oneof name if the field is part of it
+    const gp::OneofDescriptor *oneof_desc = fieldDescriptor -> containing_oneof();
+    if(oneof_desc != NULL) {
+        field["field_oneof_name"] = QString::fromStdString(oneof_desc -> name());
+    }
+
     // Add type information.
     gp::FieldDescriptor::Type type = fieldDescriptor->type();
     if (type == gp::FieldDescriptor::TYPE_MESSAGE || type == gp::FieldDescriptor::TYPE_GROUP) {

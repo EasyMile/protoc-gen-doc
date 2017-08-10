@@ -226,12 +226,20 @@
     {{#message_has_fields}}
     <table class="field-table">
       <thead>
-        <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+        <tr><td colspan="2">Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
       </thead>
       <tbody>
         {{#message_fields}}
         <tr>
-          <td>{{field_name}}</td>
+          {{#field_oneof_name}}
+            <td>{{field_oneof_name}}</td>
+            <td>{{field_name}}</td>
+          {{/field_oneof_name}}
+
+          {{^field_oneof_name}}
+            <td colspan="2">{{field_name}}</td>
+          {{/field_oneof_name}}
+
           <td><a href="#{{field_full_type}}">{{field_long_type}}</a></td>
           <td>{{field_label}}</td>
           <td>{{#p}}{{field_description}}{{#field_default_value}} Default: {{field_default_value}}{{/field_default_value}}{{/p}}</td>
