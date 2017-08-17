@@ -115,7 +115,7 @@ static inline bool longNameLessThan(const QVariant &v1, const QVariant &v2)
  * The description is taken as the leading comments followed by the trailing
  * comments. If present, a single space is removed from the start of each line.
  * Whitespace is trimmed from the final result before it is returned.
- * 
+ *
  * If the described item should be excluded from the generated documentation,
  * @p exclude is set to true. Otherwise it is set to false.
  */
@@ -165,7 +165,7 @@ static QString descriptionOf(const T *descriptor, bool &excluded)
  *
  * If the file has no description, QString() is returned. If an error occurs,
  * @p error is set to point to an error message and QString() is returned.
- * 
+ *
  * If the described file should be excluded from the generated documentation,
  * @p exclude is set to true. Otherwise it is set to false.
  */
@@ -268,17 +268,35 @@ static QString scalarTypeName(gp::FieldDescriptor::Type type)
 /**
  * Returns the name of the field label @p label.
  */
-static QString labelName(gp::FieldDescriptor::Label label)
+static QString labelName(const gp::FileDescriptor::Syntax file_syntax, gp::FieldDescriptor::Label label)
 {
-    switch(label) {
-        case gp::FieldDescriptor::LABEL_OPTIONAL:
-            return "optional";
-        case gp::FieldDescriptor::LABEL_REPEATED:
-            return "repeated";
-        case gp::FieldDescriptor::LABEL_REQUIRED:
-            return "required";
-        default:
-            return "<unknown>";
+
+    switch (file_syntax) {
+        case gp::FileDescriptor::Syntax::SYNTAX_PROTO3: {
+            switch(label) {
+                case gp::FieldDescriptor::LABEL_OPTIONAL:
+                    return "";
+                case gp::FieldDescriptor::LABEL_REPEATED:
+                    return "repeated";
+                case gp::FieldDescriptor::LABEL_REQUIRED:
+                    return "";
+                default:
+                    return "<unknown>";
+            }
+        };
+        case gp::FileDescriptor::Syntax::SYNTAX_PROTO2:
+        case gp::FileDescriptor::Syntax::SYNTAX_UNKNOWN: {
+            switch(label) {
+                case gp::FieldDescriptor::LABEL_OPTIONAL:
+                    return "optional";
+                case gp::FieldDescriptor::LABEL_REPEATED:
+                    return "repeated";
+                case gp::FieldDescriptor::LABEL_REQUIRED:
+                    return "required";
+                default:
+                    return "<unknown>";
+            }
+        };
     }
 }
 
@@ -332,7 +350,7 @@ static QString defaultValue(const gp::FieldDescriptor *fieldDescriptor)
  *
  * Adds the field described by @p fieldDescriptor to the variant list @p fields.
  */
-static void addField(const gp::FieldDescriptor *fieldDescriptor, QVariantList *fields)
+static void addField(const gp::FileDescriptor::Syntax file_syntax, const gp::FieldDescriptor *fieldDescriptor, QVariantList *fields)
 {
     bool excluded = false;
     QString description = descriptionOf(fieldDescriptor, excluded);
@@ -346,7 +364,7 @@ static void addField(const gp::FieldDescriptor *fieldDescriptor, QVariantList *f
     // Add basic info.
     field["field_name"] = QString::fromStdString(fieldDescriptor->name());
     field["field_description"] = description;
-    field["field_label"] = labelName(fieldDescriptor->label());
+    field["field_label"] = labelName(file_syntax, fieldDescriptor->label());
     field["field_default_value"] = defaultValue(fieldDescriptor);
 
     // Add the oneof name if the field is part of it
@@ -385,7 +403,7 @@ static void addField(const gp::FieldDescriptor *fieldDescriptor, QVariantList *f
  *
  * Adds the extension described by @p fieldDescriptor to the variant list @p extensions.
  */
-static void addExtension(const gp::FieldDescriptor *fieldDescriptor, QVariantList *extensions)
+static void addExtension(const gp::FileDescriptor::Syntax file_syntax, const gp::FieldDescriptor *fieldDescriptor, QVariantList *extensions)
 {
     bool excluded = false;
     QString description = descriptionOf(fieldDescriptor, excluded);
@@ -401,7 +419,7 @@ static void addExtension(const gp::FieldDescriptor *fieldDescriptor, QVariantLis
     extension["extension_full_name"] = QString::fromStdString(fieldDescriptor->full_name());
     extension["extension_long_name"] = longName(fieldDescriptor);
     extension["extension_description"] = description;
-    extension["extension_label"] = labelName(fieldDescriptor->label());
+    extension["extension_label"] = labelName(file_syntax, fieldDescriptor->label());
     extension["extension_number"] = QString::number(fieldDescriptor->number());
     extension["extension_default_value"] = defaultValue(fieldDescriptor);
 
@@ -495,7 +513,8 @@ static void addEnum(const gp::EnumDescriptor *enumDescriptor, QVariantList *enum
  * Adds the message described by @p descriptor and all its nested messages and
  * enums to the variant list @p messages and @p enums, respectively.
  */
-static void addMessages(const gp::Descriptor *descriptor,
+static void addMessages(const gp::FileDescriptor::Syntax file_syntax,
+                        const gp::Descriptor *descriptor,
                         QVariantList *messages,
                         QVariantList *enums)
 {
@@ -517,7 +536,7 @@ static void addMessages(const gp::Descriptor *descriptor,
     // Add fields.
     QVariantList fields;
     for (int i = 0; i < descriptor->field_count(); ++i) {
-        addField(descriptor->field(i), &fields);
+        addField(file_syntax, descriptor->field(i), &fields);
     }
     message["message_has_fields"] = !fields.isEmpty();
     message["message_fields"] = fields;
@@ -525,7 +544,7 @@ static void addMessages(const gp::Descriptor *descriptor,
     // Add nested extensions.
     QVariantList extensions;
     for (int i = 0; i < descriptor->extension_count(); ++i) {
-        addExtension(descriptor->extension(i), &extensions);
+        addExtension(file_syntax, descriptor->extension(i), &extensions);
     }
     message["message_has_extensions"] = !extensions.isEmpty();
     message["message_extensions"] = extensions;
@@ -534,7 +553,7 @@ static void addMessages(const gp::Descriptor *descriptor,
 
     // Add nested messages and enums.
     for (int i = 0; i < descriptor->nested_type_count(); ++i) {
-        addMessages(descriptor->nested_type(i), messages, enums);
+        addMessages(file_syntax, descriptor->nested_type(i), messages, enums);
     }
     for (int i = 0; i < descriptor->enum_type_count(); ++i) {
         addEnum(descriptor->enum_type(i), enums);
@@ -551,48 +570,48 @@ static void addService(const gp::ServiceDescriptor *serviceDescriptor, QVariantL
 {
     bool excluded = false;
     QString description = descriptionOf(serviceDescriptor, excluded);
-    
+
     if (excluded) {
         return;
     }
-    
+
     QVariantHash service;
-    
+
     // Add basic info.
     service["service_name"] = QString::fromStdString(serviceDescriptor->name());
     service["service_full_name"] = QString::fromStdString(serviceDescriptor->full_name());
     service["service_description"] = description;
-    
+
     // Add methods.
     QVariantList methods;
     for (int i = 0; i < serviceDescriptor->method_count(); ++i) {
         const gp::MethodDescriptor *methodDescriptor = serviceDescriptor->method(i);
-        
+
         bool excluded = false;
         QString description = descriptionOf(methodDescriptor, excluded);
-        
+
         if (excluded) {
             continue;
         }
-        
+
         QVariantHash method;
         method["method_name"] = QString::fromStdString(methodDescriptor->name());
         method["method_description"] = description;
-        
+
         // Add type for method input
         method["method_request_type"] = QString::fromStdString(methodDescriptor->input_type()->name());
         method["method_request_full_type"] = QString::fromStdString(methodDescriptor->input_type()->full_name());
         method["method_request_long_type"] = longName(methodDescriptor->input_type());
-        
+
         // Add type for method output
         method["method_response_type"] = QString::fromStdString(methodDescriptor->output_type()->name());
         method["method_response_full_type"] = QString::fromStdString(methodDescriptor->output_type()->full_name());
         method["method_response_long_type"] = longName(methodDescriptor->output_type());
-        
+
         methods.append(method);
     }
     service["service_methods"] = methods;
-    
+
     services->append(service);
 }
 
@@ -619,6 +638,21 @@ static void addFile(const gp::FileDescriptor *fileDescriptor, QVariantList *file
     file["file_description"] = description;
     file["file_package"] = QString::fromStdString(fileDescriptor->package());
 
+    const gp::FileDescriptor::Syntax file_syntax = fileDescriptor->syntax();
+    QString file_syntax_label;
+
+    // syntax
+    switch(file_syntax) {
+        case gp::FileDescriptor::Syntax::SYNTAX_UNKNOWN:
+            file_syntax_label = "Unknown";
+        case gp::FileDescriptor::Syntax::SYNTAX_PROTO2:
+            file_syntax_label = "proto2";
+        case gp::FileDescriptor::Syntax::SYNTAX_PROTO3:
+            file_syntax_label = "proto3";
+    }
+
+    file["file_syntax"] = file_syntax_label;
+
     QVariantList messages;
     QVariantList enums;
     QVariantList services;
@@ -626,7 +660,7 @@ static void addFile(const gp::FileDescriptor *fileDescriptor, QVariantList *file
 
     // Add messages.
     for (int i = 0; i < fileDescriptor->message_type_count(); ++i) {
-        addMessages(fileDescriptor->message_type(i), &messages, &enums);
+        addMessages(file_syntax, fileDescriptor->message_type(i), &messages, &enums);
     }
     std::sort(messages.begin(), messages.end(), &longNameLessThan);
     file["file_messages"] = messages;
@@ -645,10 +679,10 @@ static void addFile(const gp::FileDescriptor *fileDescriptor, QVariantList *file
     std::sort(services.begin(), services.end(), &longNameLessThan);
     file["file_has_services"] = !services.isEmpty();
     file["file_services"] = services;
-    
+
     // Add file-level extensions
     for (int i = 0; i < fileDescriptor->extension_count(); ++i) {
-        addExtension(fileDescriptor->extension(i), &extensions);
+        addExtension(file_syntax, fileDescriptor->extension(i), &extensions);
     }
     std::sort(extensions.begin(), extensions.end(), &longNameLessThan);
     file["file_has_extensions"] = !extensions.isEmpty();
