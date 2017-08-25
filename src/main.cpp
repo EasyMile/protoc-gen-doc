@@ -297,6 +297,8 @@ static QString labelName(const gp::FileDescriptor::Syntax file_syntax, gp::Field
                     return "<unknown>";
             }
         };
+        default:
+            return "<unknown>";
     }
 }
 
